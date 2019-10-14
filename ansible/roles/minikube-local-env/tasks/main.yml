@@ -1,0 +1,98 @@
+---
+- name: Install Packages For Docker
+  yum:
+    name: "{{ packages }}" 
+  vars:
+    packages:
+    - device-mapper-persistent-data
+    - lvm2
+    - socat
+    - tree
+    - git
+
+
+- name: Disable Swap
+  command: swapoff -a
+ 
+- name: Download Docker Repository File
+  get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+
+- name: Install Docker
+  yum:
+    name: "docker-ce-{{ docker_version }}"
+
+- name: Download CRICTL 
+  get_url:
+    url: https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.14.0/crictl-v1.14.0-linux-amd64.tar.gz
+    dest: /tmp
+
+- name: Unzip CRICTL
+  command: tar zxvf /tmp/crictl-v1.14.0-linux-amd64.tar.gz -C /usr/bin
+
+- name: Create Kubernetes Repository File
+  copy:
+    src: kubernetes.repo
+    dest: /etc/yum.repos.d/kubernetes.repo
+
+- name: Install Kubectl
+  yum:
+    name: kubectl-1.11.8
+
+- name: Start Docker Service
+  systemd: 
+    name: docker
+    state: started
+    enabled: yes
+
+- name: usermod -aG docker vagrant
+  user:
+    name: vagrant
+    groups: docker
+
+- name: Set sysctl 
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: 1
+    sysctl_set: yes
+    sysctl_file: /etc/sysctl.conf      
+    state: present
+    reload: yes
+
+
+- name: Download Minikube
+  get_url:
+    url: "https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64"
+    dest: /usr/bin/minikube
+    mode: 0755
+
+- name: Create Minikube Initialize Script
+  copy:
+    src: minikube-initialize.sh
+    dest: /tmp/minikube-initialize.sh
+    mode: 0655
+
+- name: Initialize Minikube
+  script: /tmp/minikube-initialize.sh
+
+- name: Helm Initialize Script
+  copy: 
+    src: get_helm.sh
+    dest: /tmp/get_helm.sh
+    mode: 0655
+
+- name: Install Helm
+  script: /tmp/get_helm.sh
+  ignore_errors: True
+
+
+- name: Move Helm to bin
+  command: mv /usr/local/bin/helm /usr/bin/
+
+- name: Install Helm
+  script: /tmp/get_helm.sh
+
+
+- name: Initialize Helm
+  command: helm init
